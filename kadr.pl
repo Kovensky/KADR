@@ -31,6 +31,7 @@ use List::AllUtils qw(first none);
 use POSIX ();
 use Text::Xslate;
 use Time::HiRes;
+use Unicode::Normalize;
 
 use lib "$FindBin::RealBin/lib";
 use App::KADR::AniDB::UDP::Client;
@@ -116,7 +117,7 @@ my @ed2k_of_processed_files;
 my $current_file;
 my $sl = App::KADR::Term::StatusLine::Fractional->new(
 	max => scalar @files,
-	update_label => sub { shortest $current_file->relative, $current_file },
+	update_label => sub { NFC(shortest $current_file->relative, $current_file) },
 );
 
 for my $file (@files) {
@@ -284,6 +285,8 @@ sub process_file {
 		);
 	}
 
+	$newname = NFD($newname) if $^O eq 'darwin';
+
 	move_file($file, $ed2k, $dir->file($newname));
 }
 
@@ -295,7 +298,7 @@ sub move_file {
 
 	$new->dir->mkpath unless -e $new->dir;
 
-	my $display_new = shortest $new->relative, $new;
+	my $display_new = NFC(shortest($new->relative, $new));
 	my $sl = $sl->child('Freeform');
 
 	if (-e $new) {
@@ -310,7 +313,7 @@ sub move_file {
 
 	$sl->update('Moving to ' . $display_new);
 	if (move($old, $new)) {
-		$db->update('known_files', {filename => $new->basename}, {ed2k => $ed2k, size => -s $new});
+		$db->update('known_files', {filename => NFC($new->basename)}, {ed2k => $ed2k, size => -s $new});
 		$sl->finalize('Moved to ' . $display_new);
 	}
 	else {
@@ -367,8 +370,8 @@ sub avdump {
 	}
 	else {
 		my $file_sn = substr($file, rindex($file, '/') + 1, length($file));
-		$db->set('known_files', {avdumped => 1, ed2k => $aved2k, filename => $file_sn, size => $size, mtime => $mtime},
-			{filename => $file_sn, size => $size});
+		$db->set('known_files', {avdumped => 1, ed2k => $aved2k, filename => NFC($file_sn), size => $size, mtime => $mtime},
+			{filename => NFC($file_sn), size => $size});
 		return $aved2k;
 	}
 }
@@ -377,7 +380,7 @@ sub ed2k_hash {
 	my($file, $size, $mtime) = @_;
 
 	if(my $r = $db->fetch('known_files', ['ed2k', 'avdumped'],
-		{filename => $file->basename, size => $size, mtime => $mtime}, 1)) {
+		{filename => NFC($file->basename), size => $size, mtime => $mtime}, 1)) {
 		avdump($file, $size, $mtime, $r->{ed2k}) if $conf->has_avdump and !$r->{avdumped};
 		return $r->{ed2k};
 	}
@@ -400,10 +403,10 @@ sub ed2k_hash {
 
 	my $ed2k = $ctx->hexdigest;
 	if($db->exists('known_files', {ed2k => $ed2k, size => $size})) {
-		$db->update('known_files', {filename => $file->basename, mtime => $mtime}, {ed2k => $ed2k, size => $size});
+		$db->update('known_files', {filename => NFC($file->basename), mtime => $mtime}, {ed2k => $ed2k, size => $size});
 	}
 	else {
-		$db->insert('known_files', {ed2k => $ed2k, filename => $file->basename, size => $size, mtime => $mtime});
+		$db->insert('known_files', {ed2k => $ed2k, filename => NFC($file->basename), size => $size, mtime => $mtime});
 	}
 
 	return $ed2k;
@@ -496,7 +499,7 @@ sub update_mylist_state_for_missing_files {
 			$db->remove('known_files', {ed2k => $ed2k, size => $size});
 		};
 
-		$sl->incr->update($name);
+		$sl->incr->update(NFC($name));
 
 		# File mylist information.
 		my $lid = get_cached_lid(ed2k => $ed2k, size => $size);
