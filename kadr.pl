@@ -19,6 +19,7 @@ use v5.14;
 use common::sense;
 use open qw(:std :utf8);
 use utf8;
+use Date::Format;
 use DBI::SpeedySimple;
 use Digest::ED2K;
 use Encode;
@@ -252,6 +253,11 @@ sub process_file {
 		if (none { $_->subsumes($dir) } @{$conf->valid_dirs_for_unwatched_eps}) {
 			$dir = $conf->dir_to_put_unwatched_eps;
 		}
+	}
+
+	my %season = date_to_season($fileinfo->{anime}->{air_date});
+	foreach (keys %season) {
+		$fileinfo->{anime}->{$_} = $season{$_}
 	}
 
 	$fileinfo->{video_codec} =~ s/H264\/AVC/H.264/g;
@@ -550,6 +556,34 @@ sub update_mylist_state_for_missing_files {
 		$update_sl->finalize('Mylist state set to ' . $set_state_name);
 		$db->update('anidb_mylist_file', {state => $set_state}, {lid => $lid});
 	}
+}
+
+sub date_to_season {
+	my ($timestamp) = @_;
+
+	return () unless $timestamp;
+
+	# This is meant to be applied to the first air date
+	# Sometimes shows start airing a few weeks before their
+	# designated season so some leeway should be allowed.
+	# These quarters roughly correspond to syoboi's.
+	my @quarter_map = (
+		0, 1, 1, # 0th month, Jan, Feb
+		2, 2, 2, # March, April, May
+		3, 3, 3, # June, July, Aug
+		4, 4, 4, # Sept, Oct, Nov,
+		1        # Dec counts as 1st quarter of next year
+	);
+	# Each quarter corresponds to a season
+	my @season_map = qw{0 Winter Spring Summer Autumn};
+
+	my ($yr, $mo) = split /-/, time2str('%Y-%m', $timestamp, "UTC");;
+	$yr += 1 if $mo == 12; # We consider December as Winter of next year
+	return (
+		season_year    => $yr,
+		season_quarter => $quarter_map[$mo],
+		season         => $season_map[$quarter_map[$mo]],
+	);
 }
 
 sub file_query {
