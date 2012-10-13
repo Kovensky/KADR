@@ -6,6 +6,8 @@ use IO::Uncompress::Inflate qw(inflate $InflateError);
 use List::MoreUtils qw(mesh);
 use List::Util qw(min max);
 use Time::HiRes;
+use IO::Handle;
+use IO::File;
 
 use App::KADR::AniDB::EpisodeNumber;
 
@@ -84,6 +86,15 @@ sub new {
 	$self->{handle} = IO::Socket::INET->new(Proto => 'udp', LocalPort => $self->{port}) or die($!);
 	my $host = gethostbyname('api.anidb.info') or die($!);
 	$self->{sockaddr} = sockaddr_in(9000, $host);
+
+	if (my $path = $opts->{debug_file}) {
+		if ($path eq '-') {
+			$self->{debug_fh} = IO::Handle->new_from_fd(fileno(STDERR), 'w');
+		} else {
+			$self->{debug_fh} = IO::File->new($path, '>');
+		}
+		warn $! unless $self->{debug_fh};
+	}
 	$self;
 }
 
@@ -123,6 +134,13 @@ sub episode {
 		$ret->{number} = int($ret->{number});
 	}
 	$ret
+}
+
+sub debug {
+	my $self = shift;
+	return unless $self->{debug_fh};
+	my $msg = join($, , @_) =~ s{AUTH(.*)pass=[^&]+(&)?}{AUTH$1pass=***$2}r;
+	$self->{debug_fh}->printflush(encode("UTF-8", $msg));
 }
 
 sub file {
@@ -370,7 +388,7 @@ sub _response_parse_skeleton {
 
 	# Parse header.
 	$header =~ s/^(?:(T[0-9a-f]+) )?(\d+) //;
-	{tag => $1, code => int $2, header => $header, contents => \@contents}
+	{tag => $1, code => int $2, header => $header, contents => \@contents, raw => $string}
 }
 
 sub _sendrecv {
@@ -403,6 +421,8 @@ sub _sendrecv {
 		$self->{last_command} = Time::HiRes::time;
 		$self->{queries}++;
 
+
+		$self->debug('>>> ', $req_str);
 		# Send
 		send($self->{handle}, $req_str, 0, $self->{sockaddr})
 			or die 'Send error: ' . $!;
@@ -422,6 +442,8 @@ sub _sendrecv {
 
 		# Parse
 		my $res = $self->_response_parse_skeleton($buf);
+
+		$self->debug('<<< ', $res->{raw});
 
 		# Temporary IP ban
 		die 'Banned' if $res->{code} == 555;
