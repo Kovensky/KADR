@@ -197,6 +197,7 @@ sub process_file {
 	# File not in AniDB.
 	unless ($fileinfo) {
 		$sl->child('Freeform')->finalize('Ignored');
+		$db->remove('known_files', {ed2k => $ed2k, size => $file_size});
 		return;
 	}
 
