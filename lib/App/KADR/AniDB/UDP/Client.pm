@@ -285,25 +285,7 @@ sub mylist_anime {
 		die 'Got response for multiple anime' if @$mylist > 1;
 		return $mylist->[0];
 	}
-
-	# Mylist data for this anime consists of one episode.
-
-	# File info is needed to emulate the expected output.
-	my $file = $self->file(fid => $mylist->{fid});
-
-	# Mylist episode numbers are not zero padded as they are in file info.
-	my $epno = EpisodeNumber($file->{episode_number});
-
-	{
-		aid => $params{aid},
-		anime_title => $file->{anime_romaji_name},
-		episodes => $file->{anime_total_episodes},
-		eps_with_state_unknown => ($mylist->{state} == MYLIST_STATE_UNKNOWN ? $epno : ''),
-		eps_with_state_on_hdd => ($mylist->{state} == MYLIST_STATE_HDD ? $epno : ''),
-		eps_with_state_on_cd => ($mylist->{state} == MYLIST_STATE_CD ? $epno : ''),
-		eps_with_state_deleted => ($mylist->{state} == MYLIST_STATE_DELETED ? $epno : ''),
-		watched_eps => ($mylist->{viewdate} > 0 ? $epno : ''),
-	}
+	return $mylist
 }
 
 sub mylist_anime_query {

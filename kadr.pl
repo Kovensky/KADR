@@ -663,6 +663,22 @@ sub mylist_anime_query {
 	$r = $a->mylist_anime(%params);
 	return unless $r;
 
+	if ($r->{fid}) { # 221 single mylist entry instead of the regular 312 result
+		my $anime = anime_query(aid => $r->{aid});
+		my $episode = episode_query(eid => $r->{eid});
+		my $epno = int($episode->{number}) unless $episode->{number} =~ /[SOCTP]/;
+		$r = {
+			aid => $r->{aid},
+			anime_title => $anime->{romaji_name},
+			episodes => $anime->{total_episodes},
+			eps_with_state_unknown => ($r->{state} == 0 ? $epno : ''),
+			eps_with_state_on_hdd => ($r->{state} == 1 ? $epno : ''),
+			eps_with_state_on_cd => ($r->{state} == 2 ? $epno : ''),
+			eps_with_state_deleted => ($r->{state} == 3 ? $epno : ''),
+			watched_eps => ($r->{viewdate} > 0 ? $epno : ''),
+		}
+	}
+
 	# Temporary fix to make strings look nice because AniDB::UDP::Client doesn't understand types.
 	$r->{$_} =~ tr/`/'/ for keys %$r;
 
