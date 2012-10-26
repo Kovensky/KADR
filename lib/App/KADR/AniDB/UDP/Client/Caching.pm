@@ -97,6 +97,22 @@ sub BUILD {
 	$dbh->do(SCHEMA_MYLIST_ANIME) or die 'Error initializing mylist_anime';
 }
 
+sub anidb_string_fix {
+	for my $i (@_) {
+		if (ref $i eq 'ARRAY') {
+			map { $_ = anidb_string_fix($_) } @$i;
+		} elsif (ref $i eq 'HASH') {
+			map { $i->{$_} = anidb_string_fix($i->{$_}) } keys %$i;
+		} elsif (! ref $i) {
+			# Temporary fix to make strings look nice
+			# because AniDB::UDP::Client doesn't understand types.
+			$i =~ tr/`/'/
+		}
+	}
+	return @_    if wantarray;
+	return $_[0] if defined wantarray;
+}
+
 sub file {
 	my ($self, %params) = @_;
 	my $db = $self->db;
@@ -110,8 +126,7 @@ sub file {
 	# Update
 	return unless my $file = $self->SUPER::file(%params);
 
-	# Temporary fix to make strings look nice because AniDB::UDP::Client doesn't understand types.
-	$file->{$_} =~ tr/`/'/ for grep { $_ ne 'episode_number' } keys %$file;
+	anidb_string_fix($file);
 
 	# Cache
 	$file->{updated} = time;
@@ -169,8 +184,7 @@ sub mylist_anime {
 	# Update
 	return unless my $mylist = $self->SUPER::mylist_anime(%params);
 
-	# Temporary fix to make strings look nice because AniDB::UDP::Client doesn't understand types.
-	$mylist->{anime_title} =~ tr/`/'/;
+	anidb_string_fix($mylist);
 
 	# Cache
 	$mylist->{updated} = time;
